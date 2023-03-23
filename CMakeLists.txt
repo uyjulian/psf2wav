@@ -15,17 +15,29 @@ add_executable(psf2wav
         src/psf2wav.cpp
 
         # sexy psf
-        sexypsf/PsxBios.c
-        sexypsf/PsxCounters.c
-        sexypsf/PsxDma.c
-        sexypsf/Spu.c
-        sexypsf/PsxHw.c
-        sexypsf/PsxMem.c
-        sexypsf/Misc.c
-        sexypsf/R3000A.c
-        sexypsf/PsxInterpreter.c
-        sexypsf/PsxHLE.c
+        # sexypsf_/PsxBios.c
+        # sexypsf_/PsxCounters.c
+        # sexypsf_/PsxDma.c
+        # sexypsf_/Spu.c
+        # sexypsf_/PsxHw.c
+        # sexypsf_/PsxMem.c
+        # sexypsf_/Misc.c
+        # sexypsf_/R3000A.c
+        # sexypsf_/PsxInterpreter.c
+        # sexypsf_/PsxHLE.c
+        # sexypsf_/spu/spu.c
+        sexypsf/psxbios.c
+        sexypsf/psxcounters.c
+        sexypsf/psxdma.c
+        sexypsf/spu.c
+        sexypsf/psxhw.c
+        sexypsf/psxmem.c
+        sexypsf/misc.c
+        sexypsf/r3000a.c
+        sexypsf/psxinterpreter.c
+        sexypsf/psxhle.c
         sexypsf/spu/spu.c
+
 
         # highly experimental
         highly_experimental/psf.cpp
@@ -40,20 +52,8 @@ add_executable(psf2wav
         highly_experimental/Highly_Experimental/Core/spucore.c
         highly_experimental/Highly_Experimental/Core/vfs.c
         highly_experimental/Highly_Experimental/Core/mkhebios.c
-        hebios.bin
 )
 
 target_link_libraries(psf2wav z)
-
-add_custom_command(
-  OUTPUT hebios.bin
-  DEPENDS foo_psf.fb2k-component
-  COMMAND unzip foo_psf.fb2k-component hebios.bin && touch hebios.bin
-)
-
-add_custom_command(
-  OUTPUT foo_psf.fb2k-component
-  COMMAND wget http://kode54.foobar2000.org/foo_psf.fb2k-component
-)
 
 

@@ -57,7 +57,7 @@ static INLINE s64 g_buffer(int iOff)                          // get_buffer cont
  iOff=(iOff*4)+rvb.CurrAddr;
  while(iOff>0x3FFFF)       iOff=rvb.StartAddr+(iOff-0x40000);
  while(iOff<rvb.StartAddr) iOff=0x3ffff-(rvb.StartAddr-iOff);
- return (int)(s16)BFLIP16(*(p+iOff));
+ return (int)(s16)SWAP16(*(p+iOff));
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -70,7 +70,7 @@ static INLINE void s_buffer(int iOff,int iVal)                // set_buffer cont
  while(iOff<rvb.StartAddr) iOff=0x3ffff-(rvb.StartAddr-iOff);
  if(iVal<-32768L) iVal=-32768L;
  if(iVal>32767L) iVal=32767L;
- *(p+iOff)=(s16)BFLIP16((s16)iVal);
+ *(p+iOff)=(s16)SWAP16((s16)iVal);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -82,7 +82,7 @@ static INLINE void s_buffer1(int iOff,int iVal)                // set_buffer (+1
  while(iOff>0x3FFFF) iOff=rvb.StartAddr+(iOff-0x40000);
  while(iOff<rvb.StartAddr) iOff=0x3ffff-(rvb.StartAddr-iOff);
  if(iVal<-32768L) iVal=-32768L;if(iVal>32767L) iVal=32767L;
- *(p+iOff)=(s16)BFLIP16((s16)iVal);
+ *(p+iOff)=(s16)SWAP16((s16)iVal);
 }
 
 static INLINE void MixREVERBLeftRight(s32 *oleft, s32 *oright, s32 inleft, s32 inright)

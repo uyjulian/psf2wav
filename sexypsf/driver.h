@@ -15,6 +15,7 @@ typedef struct {
         PSFTAG *tags;
 } PSFINFO;
 
+// These functions are actually defined in misc.c
 int sexy_seek(u32 t);
 void sexy_stop(void);
 void sexy_execute(void);

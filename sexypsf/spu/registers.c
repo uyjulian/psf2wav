@@ -126,7 +126,7 @@ void SPUwriteRegister(u32 reg, u16 val)
       break;
     //-------------------------------------------------//
     case H_SPUdata:
-      spuMem[spuAddr>>1] = BFLIP16(val);
+      spuMem[spuAddr>>1] = SWAP16(val);
       spuAddr+=2;
       if(spuAddr>0x7ffff) spuAddr=0;
       break;
@@ -328,7 +328,7 @@ u16 SPUreadRegister(u32 reg)
 
     case H_SPUdata:
      {
-      u16 s=BFLIP16(spuMem[spuAddr>>1]);
+      u16 s=SWAP16(spuMem[spuAddr>>1]);
       spuAddr+=2;
       if(spuAddr>0x7ffff) spuAddr=0;
       return s;
