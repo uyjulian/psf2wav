@@ -297,10 +297,13 @@ void psxRcntUpdate()
 
 #if 0
             if( SPU_async )
-            {
-                SPU_async( SpuUpdInterval[/* Config.PsxType */ 0] * rcnts[3].target );
-            }
 #endif
+            {
+#if 0
+                SPU_async( SpuUpdInterval[/* Config.PsxType */ 0] * rcnts[3].target );
+#endif
+                SPUasync( (SpuUpdInterval[/* Config.PsxType */ 0] * rcnts[3].target) / 4 );
+            }
         }
 
 #ifdef ENABLE_SIO1API
@@ -531,28 +534,6 @@ void psxRcntInit()
 
     psxRcntSet();
 }
-
-
-int CounterSPURun(void)
-{
- u32 cycles;
-
- if(psxRegs.cycle<last)
- {
-  cycles=0xFFFFFFFF-last;
-  cycles+=psxRegs.cycle;
- }
- else
-  cycles=psxRegs.cycle-last;
-
- if(cycles>=16)
- {
-  if(!SPUasync(cycles / 2 /* FIXME: why do we need to divide by 2? */)) return(0);
-  last=psxRegs.cycle;
- }
- return(1);
-}
-
 
 void CounterDeadLoopSkip()
 {

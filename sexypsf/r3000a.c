@@ -149,6 +149,7 @@ void psxBranchTest() {
 
 #if 0
 	if( SPU_async )
+#endif
 	{
 		static int init;
 		int elapsed;
@@ -163,12 +164,14 @@ void psxBranchTest() {
 
 		elapsed = psxRegs.cycle - psxRegs.intCycle[PSXINT_SPUASYNC].sCycle;
 		if (elapsed >= psxRegs.intCycle[PSXINT_SPUASYNC].cycle) {
+#if 0
 			SPU_async( elapsed );
+#endif
+			SPUasync( elapsed / 4 );
 
 			psxRegs.intCycle[PSXINT_SPUASYNC].sCycle = psxRegs.cycle;
 		}
 	}
-#endif
 
 	if ((psxRegs.cycle - psxNextsCounter) >= psxNextCounter)
 		psxRcntUpdate();

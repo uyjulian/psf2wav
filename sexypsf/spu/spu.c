@@ -207,7 +207,7 @@ int sexy_seek(u32 t)
 }
 
 #define CLIP(_x) {if(_x>32767) _x=32767; if(_x<-32767) _x=-32767;}
-int SPUasync(u32 cycles)
+void SPUasync(u32 cycles)
 {
  int volmul=iVolume;
  static s32 dosampies;
@@ -215,7 +215,7 @@ int SPUasync(u32 cycles)
 
  poo+=cycles;
  dosampies=poo/384;
- if(!dosampies) return(1);
+ if(!dosampies) goto finish;
  poo-=dosampies*384;
  temp=dosampies;
 
@@ -450,7 +450,11 @@ int SPUasync(u32 cycles)
    if(decaybegin!=~0) // Is anyone REALLY going to be playing a song
 		      // for 13 hours?
    {
-    if(sampcount>=decayend) return(0);
+    if(sampcount>=decayend)
+    {
+        sexy_jumpout();
+        return;
+    }
     dmul=256-(256*(sampcount-decaybegin)/(decayend-decaybegin));
     sl=(sl*dmul)>>8;
     sr=(sr*dmul)>>8;
@@ -480,7 +484,8 @@ int SPUasync(u32 cycles)
   *pS++=sr;
  }
 
- return(1);
+finish:
+ SPUendflush();
 }
 
 void sexy_stop(void)

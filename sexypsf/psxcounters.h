@@ -49,7 +49,6 @@ s32 psxRcntFreeze(gzFile f, s32 Mode);
 #endif
 
 #if 1
-int CounterSPURun(void);
 void CounterDeadLoopSkip();
 #endif
 

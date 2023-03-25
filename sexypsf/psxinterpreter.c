@@ -1125,24 +1125,8 @@ static void intReset() {
 }
 
 static void intExecute() {
-#if 0
 	for (;;) 
-	{
 		execI();
-		SPUendflush();
-	}
-#else
-	for (;;) 
-	{
-	 if(!CounterSPURun()) 
-	 {
-	  psxShutdown();
-	  return;
-	 }
-	 SPUendflush();
-	 execI();
-	}
-#endif
 }
 
 static void intExecuteBlock() {

@@ -30,6 +30,7 @@
 #include "spu.h"
 #include "driver.h"
 #include <stddef.h>
+#include <setjmp.h>
 
 char CdromId[10] = "";
 char CdromLabel[33] = "";
@@ -1444,14 +1445,34 @@ PSFINFO *sexy_load(char *path)
 	if(ret->stop==~0) ret->fade=0; // Infinity+anything is still infinity...or is it?
 	SPUsetlength(ret->stop,ret->fade);
 	ret->length=ret->stop+ret->fade;
-#endif
+#else
 	SPUsetlength(~0,0);
+#endif
 
         return(ret);
 }
 
+static int sexy_jump_initialized = 0;
+static jmp_buf sexy_jump;
+void sexy_jumpout(void)
+{
+	if (sexy_jump_initialized)
+	{
+		sexy_jump_initialized = 0;
+		longjmp(sexy_jump, 2);
+	}
+}
+
 void sexy_execute(void)
 {
- psxCpu->Execute();
+	sexy_jump_initialized = 1;
+	if (setjmp(sexy_jump) == 0)
+	{
+		psxCpu->Execute();
+	}
+	else
+	{
+		psxShutdown();
+	}
 }
 
