@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
     strcpy(base + 1, "hebios.bin");
 
     if (!psf_init_and_load_bios(bios_name)) {
-      return false;
+      return 0;
     }
 
     psf_play(file_name);
