@@ -43,7 +43,10 @@ extern "C"
 void sexyd_update(unsigned char* pSound,long lBytes) {
   if (!pSound)
     return;
-  fwrite(pSound, 1, lBytes, stdout);
+  if (!isatty(STDOUT_FILENO))
+  {
+    fwrite(pSound, 1, lBytes, stdout);
+  }
 }
 
 bool VERBOSE = false;
