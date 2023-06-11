@@ -39,11 +39,13 @@ void help() {
     );
 }
 
+bool stdout_is_tty = false;
+
 extern "C"
 void sexyd_update(unsigned char* pSound,long lBytes) {
   if (!pSound)
     return;
-  if (!isatty(STDOUT_FILENO))
+  if (!stdout_is_tty)
   {
     fwrite(pSound, 1, lBytes, stdout);
   }
@@ -59,6 +61,8 @@ int main(int argc, char **argv) {
   //int loop = 2;
   //int fadeout = 0;
   char decoder_type[12] = "he";
+
+  stdout_is_tty = !!isatty(STDOUT_FILENO);
 
   int opt;
   while ((opt = getopt(argc, argv, "e:tvV")) != -1) {
