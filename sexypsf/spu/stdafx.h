@@ -24,8 +24,62 @@
 //
 //*************************************************************************//
 
+#if 0
+//////////////////////////////////////////////////////////
+// WINDOWS
+//////////////////////////////////////////////////////////
+
+#ifdef _WINDOWS
+
+#define WIN32_LEAN_AND_MEAN
+#define STRICT
+#include <windows.h>
+#include <windowsx.h>
+#include "mmsystem.h"
+#include <process.h>
+#include <stdlib.h>
+
+// enable that for auxprintf();
+//#define SMALLDEBUG
+//#include <dbgout.h>
+//void auxprintf (LPCTSTR pFormat, ...);
+
+#define INLINE __inline
+
+//////////////////////////////////////////////////////////
+// LINUX
+//////////////////////////////////////////////////////////
+#else
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/soundcard.h>
+#include <unistd.h>
+#include <pthread.h>
+#define RRand(range) (random()%range)  
+#include <string.h> 
+#include <sys/time.h>  
+#include <math.h>  
+
+#undef CALLBACK
+#define CALLBACK
+#define DWORD u32
+#define LOWORD(l)           ((u16)(l)) 
+#define HIWORD(l)           ((u16)(((u32)(l) >> 16) & 0xFFFF)) 
+
+#define INLINE inline
+
+#endif
+
+#include "psemuxa.h"
+#endif
+
 #include <stdlib.h>
 #include <string.h> 
 #include <math.h>  
 
-#define INLINE inline
+#define INLINE static inline
+#define CALLBACK

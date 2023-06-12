@@ -25,10 +25,12 @@
 //*************************************************************************//
 
 
-static void SoundOn(int start,int end,u16 val);
-static void SoundOff(int start,int end,u16 val);
-static void FModOn(int start,int end,u16 val);
-static void NoiseOn(int start,int end,u16 val);
-static void SetVolumeLR(int right, u8 ch,s16 vol);
-static void SetPitch(int ch,u16 val);
-void SPUwriteRegister(u32 reg, u16 val);
+void SoundOn(int start,int end,u16 val);
+void SoundOff(int start,int end,u16 val);
+void FModOn(int start,int end,u16 val);
+void NoiseOn(int start,int end,u16 val);
+void SetVolumeL(u8 ch,s16 vol);
+void SetVolumeR(u8 ch,s16 vol);
+void SetPitch(int ch,u16 val);
+void ReverbOn(int start,int end,u16 val);
+void CALLBACK SPUwriteRegister(u32 reg, u16 val);

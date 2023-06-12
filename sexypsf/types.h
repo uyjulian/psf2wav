@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 
-#define INLINE inline
+#define INLINE static inline
 
 // Define types
 typedef int8_t s8;

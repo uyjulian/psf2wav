@@ -27,6 +27,16 @@
 //
 //*************************************************************************//
 
+
+/////////////////////////////////////////////////////////
+// generic defines
+/////////////////////////////////////////////////////////
+
+#define PSE_LT_SPU                  4
+#define PSE_SPU_ERR_SUCCESS         0
+#define PSE_SPU_ERR                 -60
+#define PSE_SPU_ERR_NOTCONFIGURED   PSE_SPU_ERR - 1
+#define PSE_SPU_ERR_INIT            PSE_SPU_ERR - 2
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 
@@ -34,8 +44,17 @@
 // spu defines
 ////////////////////////////////////////////////////////////////////////
 
+// sound buffer sizes
+// 400 ms complete sound buffer
+#define SOUNDSIZE   70560
+// 137 ms test buffer... if less than that is buffered, a new upload will happen
+#define TESTSIZE    24192
+
 // num of channels
 #define MAXCHAN     24
+
+// ~ 1 ms of data
+#define NSSIZE 45
 
 ///////////////////////////////////////////////////////////
 // struct defines
@@ -85,11 +104,18 @@ typedef struct
 // used for debug channel muting
 #define FLAG_MUTE  1
 
+// used for simple interpolation
+#define FLAG_IPOL0 2
+#define FLAG_IPOL1 4
+
 ///////////////////////////////////////////////////////////
 
 // MAIN CHANNEL STRUCT
 typedef struct
 {
+ // no mutexes used anymore... don't need them to sync access
+ //HANDLE            hMutex;
+
  int               bNew;                               // start flag
 
  int               iSBPos;                             // mixing stuff
@@ -104,11 +130,13 @@ typedef struct
 
  int               bOn;                                // is channel active (sample playing?)
  int               bStop;                              // is channel stopped (sample _can_ still be playing, ADSR Release phase)
+ int               bReverb;                            // can we do reverb on this channel? must have ctrl register bit, to get active
  int               iActFreq;                           // current psx pitch
  int               iUsedFreq;                          // current pc pitch
  int               iLeftVolume;                        // left volume
  int               iLeftVolRaw;                        // left psx volume value
  int               bIgnoreLoop;                        // ignore loop bit, if an external loop address is used
+ int               iTmpFlags;                          // temporary flags (mute, interpolation)
  int               iRightVolume;                       // right volume
  int               iRightVolRaw;                       // right psx volume value
  int               iRawPitch;                          // raw pitch (0...3fff)
@@ -120,6 +148,7 @@ typedef struct
  int               iRVBRepeat;                         // reverb repeat
  int               bNoise;                             // noise active flag
  int               bFMod;                              // freq mod (0=off, 1=sound channel, 2=freq channel)
+ int               iRVBNum;                            // another reverb helper
  int               iOldNoise;                          // old noise val for this channel   
  ADSRInfo          ADSR;                               // active ADSR settings
  ADSRInfoEx        ADSRX;                              // next ADSR settings (will be moved to active on sample start)
@@ -133,7 +162,6 @@ typedef struct
  int StartAddr;      // reverb area start addr in samples
  int CurrAddr;       // reverb area curr addr in samples
 
- int Enabled;
  int VolLeft;
  int VolRight;
  int iLastRVBLeft;
@@ -175,3 +203,140 @@ typedef struct
  int IN_COEF_L;      // (coef.)
  int IN_COEF_R;      // (coef.)
 } REVERBInfo;
+
+#if 0
+#ifdef _WINDOWS
+extern HINSTANCE hInst;
+#define WM_MUTE (WM_USER+543)
+#endif
+
+///////////////////////////////////////////////////////////
+// SPU.C globals
+///////////////////////////////////////////////////////////
+
+#ifndef _IN_SPU
+
+// psx buffers / addresses
+
+extern u16  regArea[];                        
+extern u16  spuMem[];
+extern u8 * spuMemC;
+extern u8 * pSpuIrq;
+extern u8 * pSpuBuffer;
+
+// user settings
+
+extern int        iUseXA;
+extern int        iVolume;
+extern int        iXAPitch;
+extern int        iUseTimer;
+extern int        iSPUIRQWait;
+extern int        iDebugMode;
+extern int        iRecordMode;
+extern int        iUseReverb;
+extern int        iUseInterpolation;
+extern int        iDisStereo;
+// MISC
+
+extern int iWatchDog;
+
+extern SPUCHAN s_chan[];
+extern REVERBInfo rvb;
+
+extern u32 dwNoiseVal;
+extern u16 spuCtrl;
+extern u16 spuStat;
+extern u16 spuIrq;
+extern u32  spuAddr;
+extern int      bEndThread; 
+extern int      bThreadEnded;
+extern int      bSpuInit;
+extern u32 dwNewChannel;
+
+extern int      SSumR[];
+extern int      SSumL[];
+extern int      iCycle;
+extern s16 *  pS;
+
+#ifdef _WINDOWS
+extern HWND    hWMain;                               // window handle
+extern HWND    hWDebug;
+#endif
+
+extern void (CALLBACK *cddavCallback)(u16,u16);
+
+#endif
+
+///////////////////////////////////////////////////////////
+// CFG.C globals
+///////////////////////////////////////////////////////////
+
+#ifndef _IN_CFG
+
+#ifndef _WINDOWS
+extern char * pConfigFile;
+#endif
+
+#endif
+
+///////////////////////////////////////////////////////////
+// DSOUND.C globals
+///////////////////////////////////////////////////////////
+
+#ifndef _IN_DSOUND
+
+#ifdef _WINDOWS
+extern u32 LastWrite;
+extern u32 LastPlay;
+#endif
+
+#endif
+
+///////////////////////////////////////////////////////////
+// RECORD.C globals
+///////////////////////////////////////////////////////////
+
+#ifndef _IN_RECORD
+
+#ifdef _WINDOWS
+extern int iDoRecord;
+#endif
+
+#endif
+
+///////////////////////////////////////////////////////////
+// XA.C globals
+///////////////////////////////////////////////////////////
+
+#ifndef _IN_XA
+
+extern xa_decode_t   * xapGlobal;
+
+extern u32 * XAFeed;
+extern u32 * XAPlay;
+extern u32 * XAStart;
+extern u32 * XAEnd;
+
+extern u32   XARepeat;
+extern u32   XALastVal;
+
+extern int           iLeftXAVol;
+extern int           iRightXAVol;
+
+#endif
+
+///////////////////////////////////////////////////////////
+// REVERB.C globals
+///////////////////////////////////////////////////////////
+
+#ifndef _IN_REVERB
+
+extern int *          sRVBPlay;
+extern int *          sRVBEnd;
+extern int *          sRVBStart;
+extern int            iReverbOff;
+extern int            iReverbRepeat;
+extern int            iReverbNum;    
+
+#endif
+#endif

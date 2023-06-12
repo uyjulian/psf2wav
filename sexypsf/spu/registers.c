@@ -16,41 +16,58 @@
  *                                                                         *
  ***************************************************************************/
 
-/* ChangeLog 
+//*************************************************************************//
+// History of changes:
+//
+// 2003/02/09 - kode54
+// - removed &0x3fff from reverb volume registers, fixes a few games,
+//   hopefully won't be breaking anything
+//
+// 2003/01/19 - Pete
+// - added Neill's reverb
+//
+// 2003/01/06 - Pete
+// - added Neill's ADSR timings
+//
+// 2002/05/15 - Pete
+// - generic cleanup for the Peops release
+//
+//*************************************************************************//
 
- February 8, 2004	-	xodnizel
- - Fixed setting of reverb volume.  Just typecast val("u16") to s16.
-   Also adjusted the normal channel volume to be one less than what it was before when the 
-   "phase invert" bit is set.  I'm assuming it's just in two's complement.
-
- 2003/02/09 - kode54
- - removed &0x3fff from reverb volume registers, fixes a few games,
-   hopefully won't be breaking anything
-
- 2003/01/19 - Pete
- - added Neill's reverb
-
- 2003/01/06 - Pete
- - added Neill's ADSR timings
-
- 2002/05/15 - Pete
- - generic cleanup for the Peops release
-
-*/
-
-//#include "stdafx.h"
+#include "stdafx.h"
 
 #define _IN_REGISTERS
 
-//#include "externals.h"
-//#include "registers.h"
-//#include "regs.h"
+#if 0
+#include "externals.h"
+#include "registers.h"
+#include "regs.h"
+#include "reverb.h"
+#endif
+
+/*
+// adsr time values (in ms) by James Higgs ... see the end of
+// the adsr.c source for details
+
+#define ATTACK_MS     514L
+#define DECAYHALF_MS  292L
+#define DECAY_MS      584L
+#define SUSTAIN_MS    450L
+#define RELEASE_MS    446L
+*/
+
+// we have a timebase of 1.020408f ms, not 1 ms... so adjust adsr defines
+#define ATTACK_MS      494L
+#define DECAYHALF_MS   286L
+#define DECAY_MS       572L
+#define SUSTAIN_MS     441L
+#define RELEASE_MS     437L
 
 ////////////////////////////////////////////////////////////////////////
 // WRITE REGISTERS: called by main emu
 ////////////////////////////////////////////////////////////////////////
 
-void SPUwriteRegister(u32 reg, u16 val)
+void CALLBACK SPUwriteRegister(u32 reg, u16 val)
 {
  const u32 r=reg&0xfff;
  regArea[(r-0xc00)>>1] = val;
@@ -58,18 +75,15 @@ void SPUwriteRegister(u32 reg, u16 val)
  if(r>=0x0c00 && r<0x0d80)                             // some channel info?
   {
    int ch=(r>>4)-0xc0;                                 // calc channel
-
-   //if(ch==20) printf("%08x: %04x\n",reg,val);
-
    switch(r&0x0f)
     {
      //------------------------------------------------// r volume
      case 0:                                           
-       SetVolumeLR(0,(u8)ch,val);
+       SetVolumeL((u8)ch,val);
        break;
      //------------------------------------------------// l volume
      case 2:                                           
-       SetVolumeLR(1,(u8)ch,val);
+       SetVolumeR((u8)ch,val);
        break;
      //------------------------------------------------// pitch
      case 4:                                           
@@ -82,19 +96,46 @@ void SPUwriteRegister(u32 reg, u16 val)
      //------------------------------------------------// level with pre-calcs
      case 8:
        {
-        const u32 lval=val; // DEBUG CHECK
+        const u32 lval=val;u32 lx;
         //---------------------------------------------//
         s_chan[ch].ADSRX.AttackModeExp=(lval&0x8000)?1:0; 
         s_chan[ch].ADSRX.AttackRate=(lval>>8) & 0x007f;
         s_chan[ch].ADSRX.DecayRate=(lval>>4) & 0x000f;
         s_chan[ch].ADSRX.SustainLevel=lval & 0x000f;
         //---------------------------------------------//
-      }
+        if(!iDebugMode) break;
+        //---------------------------------------------// stuff below is only for debug mode
+
+        s_chan[ch].ADSR.AttackModeExp=(lval&0x8000)?1:0;        //0x007f
+
+        lx=(((lval>>8) & 0x007f)>>2);                  // attack time to run from 0 to 100% volume
+        lx=min(31,lx);                                 // no overflow on shift!
+        if(lx) 
+         { 
+          lx = (1<<lx);
+          if(lx<2147483) lx=(lx*ATTACK_MS)/10000L;     // another overflow check
+          else           lx=(lx/10000L)*ATTACK_MS;
+          if(!lx) lx=1;
+         }
+        s_chan[ch].ADSR.AttackTime=lx;                
+
+        s_chan[ch].ADSR.SustainLevel=                 // our adsr vol runs from 0 to 1024, so scale the sustain level
+         (1024*((lval) & 0x000f))/15;
+
+        lx=(lval>>4) & 0x000f;                         // decay:
+        if(lx)                                         // our const decay value is time it takes from 100% to 0% of volume
+         {
+          lx = ((1<<(lx))*DECAY_MS)/10000L;
+          if(!lx) lx=1;
+         }
+        s_chan[ch].ADSR.DecayTime =                   // so calc how long does it take to run from 100% to the wanted sus level
+         (lx*(1024-s_chan[ch].ADSR.SustainLevel))/1024;
+       }
       break;
      //------------------------------------------------// adsr times with pre-calcs
      case 10:
       {
-       const u32 lval=val; // DEBUG CHECK
+       const u32 lval=val;u32 lx;
 
        //----------------------------------------------//
        s_chan[ch].ADSRX.SustainModeExp = (lval&0x8000)?1:0;
@@ -103,18 +144,52 @@ void SPUwriteRegister(u32 reg, u16 val)
        s_chan[ch].ADSRX.ReleaseModeExp = (lval&0x0020)?1:0;
        s_chan[ch].ADSRX.ReleaseRate = lval & 0x001f;
        //----------------------------------------------//
+       if(!iDebugMode) break;
+       //----------------------------------------------// stuff below is only for debug mode
+
+       s_chan[ch].ADSR.SustainModeExp = (lval&0x8000)?1:0;
+       s_chan[ch].ADSR.ReleaseModeExp = (lval&0x0020)?1:0;
+                   
+       lx=((((lval>>6) & 0x007f)>>2));                 // sustain time... often very high
+       lx=min(31,lx);                                  // values are used to hold the volume
+       if(lx)                                          // until a sound stop occurs
+        {                                              // the highest value we reach (due to 
+         lx = (1<<lx);                                 // overflow checking) is: 
+         if(lx<2147483) lx=(lx*SUSTAIN_MS)/10000L;     // 94704 seconds = 1578 minutes = 26 hours... 
+         else           lx=(lx/10000L)*SUSTAIN_MS;     // should be enuff... if the stop doesn't 
+         if(!lx) lx=1;                                 // come in this time span, I don't care :)
+        }
+       s_chan[ch].ADSR.SustainTime = lx;
+
+       lx=(lval & 0x001f);
+       s_chan[ch].ADSR.ReleaseVal     =lx;
+       if(lx)                                          // release time from 100% to 0%
+        {                                              // note: the release time will be
+         lx = (1<<lx);                                 // adjusted when a stop is coming,
+         if(lx<2147483) lx=(lx*RELEASE_MS)/10000L;     // so at this time the adsr vol will 
+         else           lx=(lx/10000L)*RELEASE_MS;     // run from (current volume) to 0%
+         if(!lx) lx=1;
+        }
+       s_chan[ch].ADSR.ReleaseTime=lx;
+
+       if(lval & 0x4000)                               // add/dec flag
+            s_chan[ch].ADSR.SustainModeDec=-1;
+       else s_chan[ch].ADSR.SustainModeDec=1;
       }
      break;
      //------------------------------------------------// adsr volume... mmm have to investigate this
-     //case 0xC:
-     //  break;
+     case 12:
+       break;
      //------------------------------------------------//
-     case 0xE:                                          // loop?
+     case 14:                                          // loop?
+       //WaitForSingleObject(s_chan[ch].hMutex,2000);        // -> no multithread fuckups
        s_chan[ch].pLoop=spuMemC+((u32) val<<3);
        s_chan[ch].bIgnoreLoop=1;
+       //ReleaseMutex(s_chan[ch].hMutex);                    // -> oki, on with the thread
        break;
      //------------------------------------------------//
     }
+   iWatchDog=0;
    return;
   }
 
@@ -126,7 +201,7 @@ void SPUwriteRegister(u32 reg, u16 val)
       break;
     //-------------------------------------------------//
     case H_SPUdata:
-      spuMem[spuAddr>>1] = SWAP16(val);
+      spuMem[spuAddr>>1] = val;
       spuAddr+=2;
       if(spuAddr>0x7ffff) spuAddr=0;
       break;
@@ -158,18 +233,12 @@ void SPUwriteRegister(u32 reg, u16 val)
       pSpuIrq=spuMemC+((u32) val<<3);
       break;
     //-------------------------------------------------//
-    /* Volume settings appear to be at least 15-bit unsigned in this case.  
-       Definitely NOT 15-bit signed.  Probably 16-bit signed, so s16 type cast.
-       Check out "Chrono Cross:  Shadow's End Forest"
-    */
     case H_SPUrvolL:
-      rvb.VolLeft=(s16)val;
-      //printf("%d\n",val);
+      rvb.VolLeft=val;
       break;
     //-------------------------------------------------//
     case H_SPUrvolR:
-      rvb.VolRight=(s16)val;
-      //printf("%d\n",val);
+      rvb.VolRight=val;
       break;
     //-------------------------------------------------//
 
@@ -191,11 +260,11 @@ void SPUwriteRegister(u32 reg, u16 val)
       break;
     //-------------------------------------------------//
     case H_SPUMute1:
-     //printf("M0 %04x\n",val);
+     //auxprintf("M0 %04x\n",val);
       break;
     //-------------------------------------------------//
     case H_SPUMute2:
-    // printf("M1 %04x\n",val);
+     //auxprintf("M1 %04x\n",val);
       break;
 */
     //-------------------------------------------------//
@@ -204,7 +273,6 @@ void SPUwriteRegister(u32 reg, u16 val)
       break;
     //-------------------------------------------------//
      case H_SPUon2:
-	// printf("Boop: %08x: %04x\n",reg,val);
       SoundOn(16,24,val);
       break;
     //-------------------------------------------------//
@@ -214,7 +282,19 @@ void SPUwriteRegister(u32 reg, u16 val)
     //-------------------------------------------------//
     case H_SPUoff2:
       SoundOff(16,24,val);
-	// printf("Boop: %08x: %04x\n",reg,val);
+      break;
+    //-------------------------------------------------//
+    case H_CDLeft:
+#if 0
+      iLeftXAVol=val  & 0x7fff;
+#endif
+      if(cddavCallback) cddavCallback(0,val);
+      break;
+    case H_CDRight:
+#if 0
+      iRightXAVol=val & 0x7fff;
+#endif
+      if(cddavCallback) cddavCallback(1,val);
       break;
     //-------------------------------------------------//
     case H_FMod1:
@@ -234,20 +314,24 @@ void SPUwriteRegister(u32 reg, u16 val)
       break;
     //-------------------------------------------------//
     case H_RVBon1:
-      rvb.Enabled&=~0xFFFF;
-      rvb.Enabled|=val;
+      ReverbOn(0,16,val);
       break;
-
     //-------------------------------------------------//
     case H_RVBon2:
-      rvb.Enabled&=0xFFFF;
-      rvb.Enabled|=val<<16;
+      ReverbOn(16,24,val);
       break;
-
     //-------------------------------------------------//
     case H_Reverb+0:
+
       rvb.FB_SRC_A=val;
+
+      // OK, here's the fake REVERB stuff...
+      // depending on effect we do more or less delay and repeats... bah
+      // still... better than nothing :)
+
+      SetREVERB(val);
       break;
+
 
     case H_Reverb+2   : rvb.FB_SRC_B=(s16)val;       break;
     case H_Reverb+4   : rvb.IIR_ALPHA=(s16)val;      break;
@@ -282,21 +366,24 @@ void SPUwriteRegister(u32 reg, u16 val)
     case H_Reverb+62  : rvb.IN_COEF_R=(s16)val;      break;
    }
 
+ iWatchDog=0;
 }
 
 ////////////////////////////////////////////////////////////////////////
 // READ REGISTER: called by main emu
 ////////////////////////////////////////////////////////////////////////
 
-u16 SPUreadRegister(u32 reg)
+u16 CALLBACK SPUreadRegister(u32 reg)
 {
  const u32 r=reg&0xfff;
+        
+ iWatchDog=0;
 
  if(r>=0x0c00 && r<0x0d80)
   {
    switch(r&0x0f)
     {
-     case 0xC:                                          // get adsr vol
+     case 12:                                          // get adsr vol
       {
        const int ch=(r>>4)-0xc0;
        if(s_chan[ch].bNew) return 1;                   // we are started, but not processed? return 1
@@ -306,7 +393,7 @@ u16 SPUreadRegister(u32 reg)
        return (u16)(s_chan[ch].ADSRX.EnvelopeVol>>16);
       }
 
-     case 0xE:                                          // get loop address
+     case 14:                                          // get loop address
       {
        const int ch=(r>>4)-0xc0;
        if(s_chan[ch].pLoop==NULL) return 0;
@@ -328,7 +415,7 @@ u16 SPUreadRegister(u32 reg)
 
     case H_SPUdata:
      {
-      u16 s=SWAP16(spuMem[spuAddr>>1]);
+      u16 s=spuMem[spuAddr>>1];
       spuAddr+=2;
       if(spuAddr>0x7ffff) spuAddr=0;
       return s;
@@ -352,7 +439,7 @@ u16 SPUreadRegister(u32 reg)
 // SOUND ON register write
 ////////////////////////////////////////////////////////////////////////
 
-static void SoundOn(int start,int end,u16 val)     // SOUND ON PSX COMAND
+void SoundOn(int start,int end,u16 val)     // SOUND ON PSX COMAND
 {
  int ch;
 
@@ -362,6 +449,7 @@ static void SoundOn(int start,int end,u16 val)     // SOUND ON PSX COMAND
     {
      s_chan[ch].bIgnoreLoop=0;
      s_chan[ch].bNew=1;
+     dwNewChannel|=(1<<ch);                            // bitfield for faster testing
     }
   }
 }
@@ -370,7 +458,7 @@ static void SoundOn(int start,int end,u16 val)     // SOUND ON PSX COMAND
 // SOUND OFF register write
 ////////////////////////////////////////////////////////////////////////
 
-static void SoundOff(int start,int end,u16 val)    // SOUND OFF PSX COMMAND
+void SoundOff(int start,int end,u16 val)    // SOUND OFF PSX COMMAND
 {
  int ch;
  for(ch=start;ch<end;ch++,val>>=1)                     // loop channels
@@ -386,7 +474,7 @@ static void SoundOff(int start,int end,u16 val)    // SOUND OFF PSX COMMAND
 // FMOD register write
 ////////////////////////////////////////////////////////////////////////
 
-static void FModOn(int start,int end,u16 val)      // FMOD ON PSX COMMAND
+void FModOn(int start,int end,u16 val)      // FMOD ON PSX COMMAND
 {
  int ch;
 
@@ -411,7 +499,7 @@ static void FModOn(int start,int end,u16 val)      // FMOD ON PSX COMMAND
 // NOISE register write
 ////////////////////////////////////////////////////////////////////////
 
-static void NoiseOn(int start,int end,u16 val)     // NOISE ON PSX COMMAND
+void NoiseOn(int start,int end,u16 val)     // NOISE ON PSX COMMAND
 {
  int ch;
 
@@ -432,16 +520,12 @@ static void NoiseOn(int start,int end,u16 val)     // NOISE ON PSX COMMAND
 // LEFT VOLUME register write
 ////////////////////////////////////////////////////////////////////////
 
-// please note: sweep is wrong.
+// please note: sweep and phase invert are wrong... but I've never seen
+// them used
 
-static void SetVolumeLR(int right, u8 ch,s16 vol)            // LEFT VOLUME
+void SetVolumeL(u8 ch,s16 vol)            // LEFT VOLUME
 {
- //if(vol&0xc000)
- //printf("%d %08x\n",right,vol);
- if(right)
-  s_chan[ch].iRightVolRaw=vol;
- else
-  s_chan[ch].iLeftVolRaw=vol;
+ s_chan[ch].iLeftVolRaw=vol;
 
  if(vol&0x8000)                                        // sweep?
   {
@@ -451,32 +535,51 @@ static void SetVolumeLR(int right, u8 ch,s16 vol)            // LEFT VOLUME
    vol=((vol&0x7f)+1)/2;                               // -> sweep: 0..127 -> 0..64
    vol+=vol/(2*sInc);                                  // -> HACK: we don't sweep right now, so we just raise/lower the volume by the half!
    vol*=128;
-   vol&=0x3fff;
-   //puts("Sweep");
   }
  else                                                  // no sweep:
   {
-   if(vol&0x4000)
-    vol=(vol&0x3FFF)-0x4000;
-   else
-    vol&=0x3FFF;
-
-   //if(vol&0x4000)                                      // -> mmm... phase inverted? have to investigate this
-   // vol=0-(0x3fff-(vol&0x3fff));
-   //else
-   // vol&=0x3fff;
+   if(vol&0x4000)                                      // -> mmm... phase inverted? have to investigate this
+    //vol^=0xffff;
+    vol=0x3fff-(vol&0x3fff);
   }
- if(right)
-  s_chan[ch].iRightVolume=vol;
- else
-  s_chan[ch].iLeftVolume=vol;                           // store volume
+
+ vol&=0x3fff;
+ s_chan[ch].iLeftVolume=vol;                           // store volume
+}
+
+////////////////////////////////////////////////////////////////////////
+// RIGHT VOLUME register write
+////////////////////////////////////////////////////////////////////////
+
+void SetVolumeR(u8 ch,s16 vol)            // RIGHT VOLUME
+{
+ s_chan[ch].iRightVolRaw=vol;
+
+ if(vol&0x8000)                                        // comments... see above :)
+  {
+   s16 sInc=1;
+   if(vol&0x2000) sInc=-1;
+   if(vol&0x1000) vol^=0xffff;
+   vol=((vol&0x7f)+1)/2;        
+   vol+=vol/(2*sInc);
+   vol*=128;
+  }
+ else            
+  {
+   if(vol&0x4000) //vol=vol^=0xffff;
+    vol=0x3fff-(vol&0x3fff);
+  }
+
+ vol&=0x3fff;
+
+ s_chan[ch].iRightVolume=vol;
 }
 
 ////////////////////////////////////////////////////////////////////////
 // PITCH register write
 ////////////////////////////////////////////////////////////////////////
 
-static void SetPitch(int ch,u16 val)               // SET PITCH
+void SetPitch(int ch,u16 val)               // SET PITCH
 {
  int NP;
  if(val>0x3fff) NP=0x3fff;                             // get pitch val
@@ -487,4 +590,25 @@ static void SetPitch(int ch,u16 val)               // SET PITCH
  NP=(44100L*NP)/4096L;                                 // calc frequency
  if(NP<1) NP=1;                                        // some security
  s_chan[ch].iActFreq=NP;                               // store frequency
+}
+
+////////////////////////////////////////////////////////////////////////
+// REVERB register write
+////////////////////////////////////////////////////////////////////////
+
+void ReverbOn(int start,int end,u16 val)    // REVERB ON PSX COMMAND
+{
+ int ch;
+
+ for(ch=start;ch<end;ch++,val>>=1)                     // loop channels
+  {
+   if(val&1)                                           // -> reverb on/off
+    {
+     s_chan[ch].bReverb=1;
+    }
+   else 
+    {
+     s_chan[ch].bReverb=0;
+    }
+  }
 }
