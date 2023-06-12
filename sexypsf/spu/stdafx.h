@@ -5,7 +5,6 @@
     copyright            : (C) 2002 by Pete Bernert
     email                : BlackDove@addcom.de
  ***************************************************************************/
-
 /***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -16,19 +15,7 @@
  *                                                                         *
  ***************************************************************************/
 
-//*************************************************************************//
-// History of changes:
-//
-// 2002/05/15 - Pete
-// - generic cleanup for the Peops release
-//
-//*************************************************************************//
-
 #if 0
-//////////////////////////////////////////////////////////
-// WINDOWS
-//////////////////////////////////////////////////////////
-
 #ifdef _WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
@@ -39,24 +26,27 @@
 #include <process.h>
 #include <stdlib.h>
 
-// enable that for auxprintf();
-//#define SMALLDEBUG
-//#include <dbgout.h>
-//void auxprintf (LPCTSTR pFormat, ...);
-
+#ifndef INLINE
 #define INLINE __inline
+#endif
 
-//////////////////////////////////////////////////////////
-// LINUX
-//////////////////////////////////////////////////////////
+#include "resource.h"
+
+#pragma warning (disable:4996)
+
 #else
 
+#ifndef _MACOSX
+#include "config.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifdef USEOSS
 #include <sys/soundcard.h>
+#endif
 #include <unistd.h>
 #include <pthread.h>
 #define RRand(range) (random()%range)  
@@ -66,12 +56,20 @@
 
 #undef CALLBACK
 #define CALLBACK
-#define DWORD u32
-#define LOWORD(l)           ((u16)(l)) 
-#define HIWORD(l)           ((u16)(((u32)(l) >> 16) & 0xFFFF)) 
+#define DWORD unsigned int
+#define LOWORD(l)           ((unsigned short)(l)) 
+#define HIWORD(l)           ((unsigned short)(((unsigned int)(l) >> 16) & 0xFFFF)) 
 
+#ifndef INLINE
 #define INLINE inline
+#endif
 
+#endif
+
+#if defined (__GNUC__) || defined (__clang__)
+#define UNUSED_VARIABLE __attribute__((unused))
+#else
+#define UNUSED_VARIABLE
 #endif
 
 #include "psemuxa.h"
@@ -81,5 +79,5 @@
 #include <string.h> 
 #include <math.h>  
 
-#define INLINE static inline
+#define INLINE inline
 #define CALLBACK

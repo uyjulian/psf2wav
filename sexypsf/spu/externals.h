@@ -5,7 +5,6 @@
     copyright            : (C) 2002 by Pete Bernert
     email                : BlackDove@addcom.de
  ***************************************************************************/
-
 /***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -16,17 +15,9 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <stdint.h>
 #include "../types.h"
 #include "../psxmem.h"
-
-//*************************************************************************//
-// History of changes:
-//
-// 2002/05/15 - Pete
-// - generic cleanup for the Peops release
-//
-//*************************************************************************//
-
 
 /////////////////////////////////////////////////////////
 // generic defines
@@ -37,8 +28,16 @@
 #define PSE_SPU_ERR                 -60
 #define PSE_SPU_ERR_NOTCONFIGURED   PSE_SPU_ERR - 1
 #define PSE_SPU_ERR_INIT            PSE_SPU_ERR - 2
+#ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
+#endif
+
+
+
+// 15-bit value + 1-sign
+extern int CLAMP16(int x);
+
 
 ////////////////////////////////////////////////////////////////////////
 // spu defines
@@ -53,8 +52,41 @@
 // num of channels
 #define MAXCHAN     24
 
-// ~ 1 ms of data
-#define NSSIZE 45
+
+// ~ 1 ms of data - somewhat slower than Eternal
+//#define NSSIZE 45
+//#define INTERVAL_TIME 1000
+
+// ~ 0.5 ms of data - roughly Eternal maybe
+//#define NSSIZE 23
+//#define INTERVAL_TIME 2000
+
+// ~ 0.25 ms of data - seems a little bad..?
+//#define NSSIZE 12
+//#define INTERVAL_TIME 4000
+
+#define NSSIZE 10
+#define APU_CYCLES_UPDATE NSSIZE
+
+
+// update times
+#if 0
+// PEOPS DSound 1.09a - good sound cards
+#define LATENCY 10
+#elif defined (_WINDOWS)
+// work on most cards
+#define LATENCY 25
+#else
+// work on most cards
+#define LATENCY 25
+#endif
+
+
+// make sure this is bigger than cpu action - no glitchy
+#define INTERVAL_TIME 4500
+
+
+#define CPU_CLOCK 33868800
 
 ///////////////////////////////////////////////////////////
 // struct defines
@@ -64,19 +96,19 @@
 typedef struct
 {
  int            AttackModeExp;
- s32           AttackTime;
- s32           DecayTime;
- s32           SustainLevel;
+ long           AttackTime;
+ long           DecayTime;
+ long           SustainLevel;
  int            SustainModeExp;
- s32           SustainModeDec;
- s32           SustainTime;
+ long           SustainModeDec;
+ long           SustainTime;
  int            ReleaseModeExp;
- u32  ReleaseVal;
- s32           ReleaseTime;
- s32           ReleaseStartTime; 
- s32           ReleaseVol; 
- s32           lTime;
- s32           lVolume;
+ unsigned long  ReleaseVal;
+ long           ReleaseTime;
+ long           ReleaseStartTime;
+ long           ReleaseVol;
+ long           lTime;
+ long           lVolume;
 } ADSRInfo;
 
 typedef struct
@@ -92,11 +124,12 @@ typedef struct
  int            ReleaseModeExp;
  int            ReleaseRate;
  int            EnvelopeVol;
- s32           lVolume;
- s32           lDummy1;
- s32           lDummy2;
+ int            EnvelopeVol_f;			// fraction
+ long           lVolume;
+ long           lDummy1;
+ long           lDummy2;
 } ADSRInfoEx;
-              
+
 ///////////////////////////////////////////////////////////
 
 // Tmp Flags
@@ -121,12 +154,12 @@ typedef struct
  int               iSBPos;                             // mixing stuff
  int               spos;
  int               sinc;
- int               SB[32+1];
+ int               SB[32+32];                          // Pete added another 32 dwords in 1.6 ... prevents overflow issues with gaussian/cubic interpolation (thanx xodnizel!), and can be used for even better interpolations, eh? :)
  int               sval;
 
- u8 *   pStart;                             // start ptr into sound mem
- u8 *   pCurr;                              // current pos in sound mem
- u8 *   pLoop;                              // loop ptr in sound mem
+ unsigned char *   pStart;                             // start ptr into sound mem
+ unsigned char *   pCurr;                              // current pos in sound mem
+ unsigned char *   pLoop;                              // loop ptr in sound mem
 
  int               bOn;                                // is channel active (sample playing?)
  int               bStop;                              // is channel stopped (sample _can_ still be playing, ADSR Release phase)
@@ -135,8 +168,9 @@ typedef struct
  int               iUsedFreq;                          // current pc pitch
  int               iLeftVolume;                        // left volume
  int               iLeftVolRaw;                        // left psx volume value
- int               bIgnoreLoop;                        // ignore loop bit, if an external loop address is used
- int               iTmpFlags;                          // temporary flags (mute, interpolation)
+ int               bLoopJump;													 // ignore loop bit, if an external loop address is used
+ int               iMute;                              // mute mode (debug)
+ int               iSilent;                            // voice on - sound on/off
  int               iRightVolume;                       // right volume
  int               iRightVolRaw;                       // right psx volume value
  int               iRawPitch;                          // raw pitch (0...3fff)
@@ -149,10 +183,9 @@ typedef struct
  int               bNoise;                             // noise active flag
  int               bFMod;                              // freq mod (0=off, 1=sound channel, 2=freq channel)
  int               iRVBNum;                            // another reverb helper
- int               iOldNoise;                          // old noise val for this channel   
+ int               iOldNoise;                          // old noise val for this channel
  ADSRInfo          ADSR;                               // active ADSR settings
  ADSRInfoEx        ADSRX;                              // next ADSR settings (will be moved to active on sample start)
-
 } SPUCHAN;
 
 ///////////////////////////////////////////////////////////
@@ -168,7 +201,6 @@ typedef struct
  int iLastRVBRight;
  int iRVBLeft;
  int iRVBRight;
-
 
  int FB_SRC_A;       // (offset)
  int FB_SRC_B;       // (offset)
@@ -218,15 +250,14 @@ extern HINSTANCE hInst;
 
 // psx buffers / addresses
 
-extern u16  regArea[];                        
-extern u16  spuMem[];
-extern u8 * spuMemC;
-extern u8 * pSpuIrq;
-extern u8 * pSpuBuffer;
+extern unsigned short  regArea[];
+extern unsigned short  spuMem[];
+extern unsigned char * spuMemC;
+extern unsigned char * pSpuIrq;
+extern unsigned char * pSpuBuffer;
 
 // user settings
 
-extern int        iUseXA;
 extern int        iVolume;
 extern int        iXAPitch;
 extern int        iUseTimer;
@@ -236,46 +267,39 @@ extern int        iRecordMode;
 extern int        iUseReverb;
 extern int        iUseInterpolation;
 extern int        iDisStereo;
+extern int				iFreqResponse;
 // MISC
 
-extern int iWatchDog;
+extern int iSpuAsyncWait;
 
 extern SPUCHAN s_chan[];
 extern REVERBInfo rvb;
 
-extern u32 dwNoiseVal;
-extern u16 spuCtrl;
-extern u16 spuStat;
-extern u16 spuIrq;
-extern u32  spuAddr;
-extern int      bEndThread; 
+extern unsigned long dwNoiseVal;
+extern unsigned long dwNoiseClock;
+extern unsigned long dwNoiseCount;
+extern unsigned short spuCtrl;
+extern unsigned short spuStat;
+extern unsigned short spuIrq;
+extern unsigned long  spuAddr;
+extern int      bEndThread;
 extern int      bThreadEnded;
 extern int      bSpuInit;
-extern u32 dwNewChannel;
+extern uint32_t dwNewChannel;
+extern unsigned int bIrqHit;
 
 extern int      SSumR[];
 extern int      SSumL[];
 extern int      iCycle;
-extern s16 *  pS;
+extern short *  pS;
 
 #ifdef _WINDOWS
 extern HWND    hWMain;                               // window handle
 extern HWND    hWDebug;
 #endif
 
-extern void (CALLBACK *cddavCallback)(u16,u16);
-
-#endif
-
-///////////////////////////////////////////////////////////
-// CFG.C globals
-///////////////////////////////////////////////////////////
-
-#ifndef _IN_CFG
-
-#ifndef _WINDOWS
-extern char * pConfigFile;
-#endif
+extern void (CALLBACK *cddavCallback)(unsigned short,unsigned short);
+extern void (CALLBACK *irqCallback)(void);                  // func of main emu, called on spu irq
 
 #endif
 
@@ -286,8 +310,8 @@ extern char * pConfigFile;
 #ifndef _IN_DSOUND
 
 #ifdef _WINDOWS
-extern u32 LastWrite;
-extern u32 LastPlay;
+extern unsigned long LastWrite;
+extern unsigned long LastPlay;
 #endif
 
 #endif
@@ -312,13 +336,18 @@ extern int iDoRecord;
 
 extern xa_decode_t   * xapGlobal;
 
-extern u32 * XAFeed;
-extern u32 * XAPlay;
-extern u32 * XAStart;
-extern u32 * XAEnd;
+extern uint32_t * XAFeed;
+extern uint32_t * XAPlay;
+extern uint32_t * XAStart;
+extern uint32_t * XAEnd;
 
-extern u32   XARepeat;
-extern u32   XALastVal;
+extern uint32_t   XARepeat;
+extern uint32_t   XALastVal;
+
+extern uint32_t * CDDAFeed;
+extern uint32_t * CDDAPlay;
+extern uint32_t * CDDAStart;
+extern uint32_t * CDDAEnd;
 
 extern int           iLeftXAVol;
 extern int           iRightXAVol;
@@ -336,7 +365,7 @@ extern int *          sRVBEnd;
 extern int *          sRVBStart;
 extern int            iReverbOff;
 extern int            iReverbRepeat;
-extern int            iReverbNum;    
+extern int            iReverbNum;
 
 #endif
 #endif

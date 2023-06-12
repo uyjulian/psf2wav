@@ -5,7 +5,6 @@
     copyright            : (C) 2002 by Pete Bernert
     email                : BlackDove@addcom.de
  ***************************************************************************/
-
 /***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -16,21 +15,13 @@
  *                                                                         *
  ***************************************************************************/
 
-//*************************************************************************//
-// History of changes:
-//
-// 2002/05/15 - Pete
-// - generic cleanup for the Peops release
-//
-//*************************************************************************//
+void SoundOn(int start,int end,unsigned short val);
+void SoundOff(int start,int end,unsigned short val);
+void FModOn(int start,int end,unsigned short val);
+void NoiseOn(int start,int end,unsigned short val);
+void SetVolumeL(unsigned char ch,short vol);
+void SetVolumeR(unsigned char ch,short vol);
+void SetPitch(int ch,unsigned short val);
+void ReverbOn(int start,int end,unsigned short val);
+void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val);
 
-
-void SoundOn(int start,int end,u16 val);
-void SoundOff(int start,int end,u16 val);
-void FModOn(int start,int end,u16 val);
-void NoiseOn(int start,int end,u16 val);
-void SetVolumeL(u8 ch,s16 vol);
-void SetVolumeR(u8 ch,s16 vol);
-void SetPitch(int ch,u16 val);
-void ReverbOn(int start,int end,u16 val);
-void CALLBACK SPUwriteRegister(u32 reg, u16 val);
